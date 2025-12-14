@@ -279,4 +279,46 @@ app.post("/videos/:videoId/toggle-like", async (req, res) => {
   }
 });
 
+/**
+ * POST /videos/:id/add-views
+ * body: { views }
+ */
+app.post("/videos/:id/add-views", async (req, res) => {
+  try {
+    const videoId = Number(req.params.id);
+    const views = Number(req.body.views);
+
+    if (!videoId || !views || views <= 0) {
+      return res.status(400).json({ error: "Invalid videoId or views" });
+    }
+
+    const { data, error } = await supabase
+      .from("videos_metadata")
+      .update({ views })
+      .eq("id", videoId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("add-views error:", error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    if (!data) {
+      return res.status(404).json({ error: "Video not found" });
+    }
+
+    res.json({
+      success: true,
+      video_id: videoId,
+      views: data.views
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 app.listen(port, () => console.log(`🎥 Video API running at http://localhost:${port}`));
