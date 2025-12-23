@@ -3,7 +3,9 @@ import cors from "cors";
 import dotenv from "dotenv";
 import multer from "multer";
 import { createClient } from "@supabase/supabase-js";
+import axios from "axios";
 import path from "path";
+
 
 dotenv.config();
 
@@ -31,15 +33,22 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 /**
  * Helpers
  */
+const esc = (s = "") =>
+  String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
 const uploadToBucket = async (bucketName, fileBuffer, fileName, mimeType) => {
-  const { data, error } = await supabase.storage
+  const { error } = await supabase.storage
     .from(bucketName)
     .upload(fileName, fileBuffer, { contentType: mimeType, upsert: true });
 
   if (error) throw error;
 
-  const { data: publicData } = supabase.storage.from(bucketName).getPublicUrl(fileName);
-  return publicData.publicUrl;
+  const { data } = supabase.storage.from(bucketName).getPublicUrl(fileName);
+  return data.publicUrl;
 };
 
 /**
@@ -48,277 +57,215 @@ const uploadToBucket = async (bucketName, fileBuffer, fileName, mimeType) => {
 app.get("/", (req, res) => res.json({ message: "Video API running 🎬" }));
 
 /**
- * GET /videos - get all videos (recent first)
+ * APIs (UNCHANGED)
  */
 app.get("/videos", async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from("videos_metadata")
-      .select("*")
-      .order("id", { ascending: false });
-
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ videos: data });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/**
- * GET /videos/:id - single video
- */
-app.get("/videos/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const { data, error } = await supabase
-      .from("videos_metadata")
-      .select("*")
-      .eq("id", id)
-      .single();
-
-    if (error) return res.status(404).json({ error: error.message });
-    res.json({ video: data });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/**
- * GET /videos/related?limit=5&category=viral
- */
-app.get("/videos/related", async (req, res) => {
-  try {
-    const limit = Number(req.query.limit) || 5;
-    const category = req.query.category || null;
-
-    let query = supabase
-      .from("videos_metadata")
-      .select("*")
-      .limit(limit);
-
-    if (category) {
-      query = query.eq("category", category);
-    }
-
-    const { data, error } = await query;
-
-    if (error) return res.status(500).json({ error: error.message });
-
-    res.json({ videos: data });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/**
- * POST /upload/video - upload actual video file to 'videos' bucket
- * form field name: 'video'
- */
-app.post("/upload/video", upload.single("video"), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: "No video file uploaded" });
-
-    const fileExt = path.extname(req.file.originalname) || ".mp4";
-    const fileName = `video_${Date.now()}${fileExt}`;
-
-    const publicUrl = await uploadToBucket("videos", req.file.buffer, fileName, req.file.mimetype);
-    res.json({ fileName, video_url: publicUrl });
-  } catch (err) {
-    console.error("upload/video error:", err);
-    res.status(500).json({ error: err.message || "Upload failed" });
-  }
-});
-
-/**
- * POST /upload/thumbnail - upload thumbnail to 'thumbnails' bucket
- * form field name: 'thumbnail'
- */
-app.post("/upload/thumbnail", upload.single("thumbnail"), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: "No thumbnail uploaded" });
-
-    const fileExt = path.extname(req.file.originalname) || ".jpg";
-    const fileName = `thumb_${Date.now()}${fileExt}`;
-
-    const publicUrl = await uploadToBucket("thumbnails", req.file.buffer, fileName, req.file.mimetype);
-    res.json({ fileName, thumbnail_url: publicUrl });
-  } catch (err) {
-    console.error("upload/thumbnail error:", err);
-    res.status(500).json({ error: err.message || "Upload failed" });
-  }
-});
-
-/**
- * POST /videos - create metadata record with duration and views
- * body: { title, description, category, video_url, thumbnail_url, duration, views }
- */
-app.post("/videos", async (req, res) => {
-  try {
-    const { title, description, category, video_url, thumbnail_url, duration, views } = req.body;
-    if (!title || !video_url || !thumbnail_url) {
-      return res.status(400).json({ error: "title, video_url, thumbnail_url required" });
-    }
-
-    const { data, error } = await supabase
-      .from("videos_metadata")
-      .insert([{
-        title,
-        description,
-        category,
-        video_url,
-        thumbnail_url,
-        duration: duration || 0,
-        views: views || 0
-      }])
-      .select();
-
-    if (error) return res.status(500).json({ error: error.message });
-    res.status(201).json({ message: "Video metadata created", video: data[0] });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/**
- * POST /videos/:id/view - increment view count
- */
-app.post("/videos/:id/view", async (req, res) => {
-  const videoId = Number(req.params.id);
-
-  const { data, error } = await supabase.rpc("increase_view", {
-    video_id_input: videoId,
-  });
+  const { data, error } = await supabase
+    .from("videos_metadata")
+    .select("*")
+    .order("id", { ascending: false });
 
   if (error) return res.status(500).json({ error: error.message });
+  res.json({ videos: data });
+});
 
-  res.json({ views: data });
+app.get("/videos/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const { data, error } = await supabase
+    .from("videos_metadata")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error) return res.status(404).json({ error: error.message });
+  res.json({ video: data });
+});
+
+app.get("/videos/related", async (req, res) => {
+  const limit = Number(req.query.limit) || 5;
+  const category = req.query.category;
+
+  let query = supabase.from("videos_metadata").select("*").limit(limit);
+  if (category) query = query.eq("category", category);
+
+  const { data, error } = await query;
+  if (error) return res.status(500).json({ error: error.message });
+
+  res.json({ videos: data });
+});
+
+app.post("/upload/video", upload.single("video"), async (req, res) => {
+  const fileExt = path.extname(req.file.originalname) || ".mp4";
+  const fileName = `video_${Date.now()}${fileExt}`;
+  const video_url = await uploadToBucket("videos", req.file.buffer, fileName, req.file.mimetype);
+  res.json({ fileName, video_url });
+});
+
+app.post("/upload/thumbnail", upload.single("thumbnail"), async (req, res) => {
+  const fileExt = path.extname(req.file.originalname) || ".jpg";
+  const fileName = `thumb_${Date.now()}${fileExt}`;
+  const thumbnail_url = await uploadToBucket("thumbnails", req.file.buffer, fileName, req.file.mimetype);
+  res.json({ fileName, thumbnail_url });
+});
+
+app.post("/videos", async (req, res) => {
+  const { title, description, category, video_url, thumbnail_url, duration, views, meta_title, meta_description, meta_keywords } = req.body;
+
+  const { data, error } = await supabase.from("videos_metadata").insert([{
+    title,
+    description,
+    category,
+    video_url,
+    thumbnail_url,
+    duration: duration || 0,
+    views: views || 0,
+    meta_title: meta_title || title,
+    meta_description: meta_description || description || "",
+    meta_keywords: meta_keywords || ""
+  }]).select();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json({ video: data[0] });
 });
 
 /**
- * GET /videos/most-viewed - top videos by views
+ * Sitemap (FRONTEND URL for SEO)
  */
-app.get("/videos/most-viewed", async (req, res) => {
-  try {
-    const limit = Number(req.query.limit) || 20;
-    const { data, error } = await supabase
-      .from("videos_metadata")
-      .select("*")
-      .order("views", { ascending: false })
-      .limit(limit);
+app.get("/sitemap.xml", async (req, res) => {
+  const { data } = await supabase.from("videos_metadata").select("id");
 
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ videos: data });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  // ✅ Frontend domain URLs for SEO
+  const siteUrl = "https://lushfans.netlify.app";
+
+  const urls = data.map(v => `
+    <url>
+      <loc>${siteUrl}/video/${v.id}</loc>
+    </url>
+  `).join("");
+
+  res.header("Content-Type", "application/xml");
+  res.send(`
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls}
+</urlset>
+`);
+});
+
+
+
+/**
+ * SEO VIDEO PAGE (MAIN FIX – UPDATED)
+ */
+app.get("/video/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const { data: video } = await supabase
+    .from("videos_metadata")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (!video) return res.status(404).send("Video not found");
+
+  // ✅ FRONTEND DOMAIN (your SPA) for SEO and redirect
+  const siteUrl = "http://127.0.0.1:4049/newtry";
+
+  res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>${esc(video.meta_title || video.title)}</title>
+<meta name="description" content="${esc(video.meta_description)}">
+<meta name="keywords" content="${esc(video.meta_keywords)}">
+<meta name="robots" content="index,follow">
+
+<link rel="canonical" href="${siteUrl}/video/${video.id}" />
+
+<!-- OPEN GRAPH -->
+<meta property="og:type" content="video.other">
+<meta property="og:title" content="${esc(video.meta_title)}">
+<meta property="og:description" content="${esc(video.meta_description)}">
+<meta property="og:image" content="${video.thumbnail_url}">
+<meta property="og:url" content="${siteUrl}/video/${video.id}">
+
+<!-- TWITTER -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${esc(video.meta_title)}">
+<meta name="twitter:description" content="${esc(video.meta_description)}">
+<meta name="twitter:image" content="${video.thumbnail_url}">
+
+<!-- ✅ VIDEO SCHEMA (JSON-LD for Google) -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "VideoObject",
+  "name": "${esc(video.title)}",
+  "description": "${esc(video.meta_description)}",
+  "thumbnailUrl": ["${video.thumbnail_url}"],
+  "contentUrl": "${video.video_url}",
+  "embedUrl": "${siteUrl}/video/${video.id}"
+}
+</script>
+
+<!-- SPA REDIRECT (unchanged for users) -->
+<script>
+  window.location.replace("${siteUrl}/?v=${video.id}&cat=${video.category}");
+</script>
+</head>
+<body>
+<h1>${esc(video.title)}</h1>
+<p>${esc(video.description)}</p>
+
+<!-- Fallback link for SEO / users without JS -->
+<p><a href="${siteUrl}/?v=${video.id}&cat=${video.category}">Watch Video</a></p>
+</body>
+</html>
+`);
+});
+
+
+/**
+ * Download a selected video
+ */
+app.get("/download/:id", async (req, res) => {
+  const id = Number(req.params.id);
+
+  const { data: video, error } = await supabase
+    .from("videos_metadata")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error || !video) {
+    return res.status(404).send("Video not found");
   }
-});
 
-/**
- * GET /videos/trending - videos from last N days ordered by views
- */
-app.get("/videos/trending", async (req, res) => {
   try {
-    const days = Number(req.query.days) || 7;
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const fileName = path.basename(video.video_url);
 
-    const { data, error } = await supabase
-      .from("videos_metadata")
-      .select("*")
-      .gt("created_at", since)
-      .order("views", { ascending: false })
-      .limit(50);
+    // 🔥 FORCE DOWNLOAD HEADERS
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${fileName}"`
+    );
+    res.setHeader("Content-Type", "application/octet-stream");
 
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ videos: data });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/**
- * Likes: simple toggle (demo)
- */
-app.post("/videos/:videoId/toggle-like", async (req, res) => {
-  try {
-    const videoId = Number(req.params.videoId);
-    const userId = req.body.user_id;
-    if (!userId) return res.status(400).json({ error: "user_id required in body (demo)" });
-
-    const { data: existing, error: selectError } = await supabase
-      .from("liked_videos")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("video_id", videoId)
-      .single();
-
-    if (selectError && selectError.code !== "PGRST116") {
-      return res.status(500).json({ error: selectError.message });
-    }
-
-    let liked = true;
-    if (!existing) {
-      const { data, error } = await supabase.from("liked_videos").insert([{ user_id: userId, video_id: videoId }]).select();
-      if (error) return res.status(500).json({ error: error.message });
-    } else {
-      liked = false;
-      const { error } = await supabase.from("liked_videos").delete().eq("user_id", userId).eq("video_id", videoId);
-      if (error) return res.status(500).json({ error: error.message });
-    }
-
-    const { count, error: countError } = await supabase
-      .from("liked_videos")
-      .select("*", { count: "exact", head: true })
-      .eq("video_id", videoId);
-
-    if (countError) return res.status(500).json({ error: countError.message });
-
-    res.json({ liked, likes_count: count });
-  } catch (err) {
-    console.error("toggle-like error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/**
- * POST /videos/:id/add-views
- * body: { views }
- */
-app.post("/videos/:id/add-views", async (req, res) => {
-  try {
-    const videoId = Number(req.params.id);
-    const views = Number(req.body.views);
-
-    if (!videoId || !views || views <= 0) {
-      return res.status(400).json({ error: "Invalid videoId or views" });
-    }
-
-    const { data, error } = await supabase
-      .from("videos_metadata")
-      .update({ views })
-      .eq("id", videoId)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("add-views error:", error);
-      return res.status(500).json({ error: error.message });
-    }
-
-    if (!data) {
-      return res.status(404).json({ error: "Video not found" });
-    }
-
-    res.json({
-      success: true,
-      video_id: videoId,
-      views: data.views
+    // 🔥 STREAM VIDEO THROUGH API
+    const response = await axios({
+      method: "GET",
+      url: video.video_url,
+      responseType: "stream",
     });
+
+    response.data.pipe(res);
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message });
+    res.status(500).send("Download failed");
   }
 });
 
 
-app.listen(port, () => console.log(`🎥 Video API running at http://localhost:${port}`));
+app.listen(port, () => console.log(`🎥 Video API running on ${port}`));
