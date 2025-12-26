@@ -60,14 +60,29 @@ app.get("/", (req, res) => res.json({ message: "Video API running 🎬" }));
  * APIs (UNCHANGED)
  */
 app.get("/videos", async (req, res) => {
-  const { data, error } = await supabase
-    .from("videos_metadata")
-    .select("*")
-    .order("id", { ascending: false });
+  const page = Number(req.query.page) || 1;
+  const limit = 10;
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
 
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ videos: data });
+  const { data, error, count } = await supabase
+    .from("videos_metadata")
+    .select("*", { count: "exact" })
+    .order("id", { ascending: false })
+    .range(from, to);
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+
+  res.json({
+    page,
+    limit,
+    hasMore: to + 1 < count,
+    videos: data
+  });
 });
+
 
 app.get("/videos/:id", async (req, res) => {
   const id = Number(req.params.id);
