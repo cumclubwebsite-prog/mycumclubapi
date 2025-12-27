@@ -61,27 +61,178 @@ app.get("/", (req, res) => res.json({ message: "Video API running 🎬" }));
  */
 app.get("/videos", async (req, res) => {
   const page = Number(req.query.page) || 1;
-  const limit = 10;
-  const from = (page - 1) * limit;
-  const to = from + limit - 1;
+  const limit = 5;
 
-  const { data, error, count } = await supabase
-    .from("videos_metadata")
-    .select("*", { count: "exact" })
-    .order("id", { ascending: false })
-    .range(from, to);
+  try {
+    // ✅ 1️⃣ TOTAL COUNT
+    const { count, error: countError } = await supabase
+      .from("videos_metadata")
+      .select("*", { count: "exact", head: true });
 
-  if (error) {
-    return res.status(500).json({ error: error.message });
+    if (countError) {
+      return res.status(500).json({ error: countError.message });
+    }
+
+    // ✅ 2️⃣ RANDOM SELECTION
+    // Approach: first generate random offsets for `limit` rows
+    const total = count || 0;
+    const randomOffsets = Array.from({ length: limit }, () =>
+      Math.floor(Math.random() * total)
+    );
+
+    const videoPromises = randomOffsets.map(async (offset) => {
+      const { data, error } = await supabase
+        .from("videos_metadata")
+        .select("*")
+        .range(offset, offset);
+      if (error) throw error;
+      return data[0];
+    });
+
+    const videos = await Promise.all(videoPromises);
+
+    res.json({
+      page,
+      limit,
+      totalCount: total,
+      hasMore: true, // always true for random
+      videos
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Bulk update videos
+app.patch("/videos/bulk-update", async (req, res) => {
+  const { video_ids, updates } = req.body;
+
+  if (!Array.isArray(video_ids) || video_ids.length === 0) {
+    return res.status(400).json({ error: "No video IDs provided" });
+  }
+  if (!updates || Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: "No updates provided" });
   }
 
-  res.json({
-    page,
-    limit,
-    hasMore: to + 1 < count,
-    videos: data
-  });
+  try {
+    const { data, error } = await supabase
+    .from("videos_metadata")
+    .update(updates)
+    .in("id", video_ids.map(id => Number(id)))
+    .select(); // ensures 'data' is an array
+  
+  res.json({ success: true, updated: data.length });
+  
+  } catch (err) {
+    console.error("Bulk update error:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
+
+// Bulk delete videos
+app.post("/videos/bulk-delete", async (req, res) => {
+  const { video_ids } = req.body;
+
+  if (!Array.isArray(video_ids) || video_ids.length === 0)
+      return res.status(400).json({ error: "No video IDs provided" });
+
+  try {
+      const { data, error } = await supabase
+          .from("videos_metadata")
+          .delete()
+          .in("id", video_ids.map(id => Number(id)))
+          .select();
+
+      if (error) throw error;
+
+      res.json({ success: true, deleted: data.length });
+  } catch (err) {
+      console.error("Bulk delete error:", err);
+      res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+//second confused
+// app.get("/videos", async (req, res) => {
+//   const page = Number(req.query.page) || 1;
+//   const limit = 5;
+
+//   try {
+//     const { count, error: countError } = await supabase
+//       .from("videos_metadata")
+//       .select("*", { count: "exact", head: true });
+
+//     if (countError) {
+//       return res.status(500).json({ error: countError.message });
+//     }
+
+//     const total = count || 0;
+//     const randomOffsets = Array.from({ length: limit }, () =>
+//       Math.floor(Math.random() * total)
+//     );
+
+//     const videoPromises = randomOffsets.map(async (offset) => {
+//       const { data, error } = await supabase
+//         .from("videos_metadata")
+//         .select("*")
+//         .range(offset, offset);
+//       if (error) throw error;
+//       return data[0];
+//     });
+
+//     const videos = await Promise.all(videoPromises);
+
+//     res.json({
+//       page,
+//       limit,
+//       totalCount: total,
+//       hasMore: true,
+//       videos
+//     });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
+//3rd failed
+// app.get("/videos", async (req, res) => {
+//   const page = Number(req.query.page) || 1;
+//   const limit = 5;
+
+//   try {
+//     // ✅ 1️⃣ TOTAL COUNT (optional, for UI)
+//     const { count, error: countError } = await supabase
+//       .from("videos_metadata")
+//       .select("*", { count: "exact", head: true });
+
+//     if (countError) {
+//       return res.status(500).json({ error: countError.message });
+//     }
+
+//     // ✅ 2️⃣ RANDOM SELECTION using precomputed random_value
+//     const { data: videos, error: fetchError } = await supabase
+//       .from("videos_metadata")
+//       .select("*")
+//       .order("random_value", { ascending: true }) // use precomputed column
+//       .range((page - 1) * limit, page * limit - 1); // pagination support
+
+//     if (fetchError) throw fetchError;
+
+//     res.json({
+//       page,
+//       limit,
+//       totalCount: count || 0,
+//       hasMore: count ? page * limit < count : true,
+//       videos
+//     });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
+
 
 
 app.get("/videos/:id", async (req, res) => {
