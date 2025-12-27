@@ -61,7 +61,7 @@ app.get("/", (req, res) => res.json({ message: "Video API running 🎬" }));
  */
 app.get("/videos", async (req, res) => {
   const page = Number(req.query.page) || 1;
-  const limit = 5;
+  const limit = 3;
 
   try {
     // ✅ 1️⃣ TOTAL COUNT
