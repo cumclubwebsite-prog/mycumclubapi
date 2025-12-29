@@ -59,51 +59,80 @@ app.get("/", (req, res) => res.json({ message: "Video API running 🎬" }));
 /**
  * APIs (UNCHANGED)
  */
+// app.get("/videos", async (req, res) => {
+//   const limit = Number(req.query.limit) || 3;
+
+//   try {
+//     // RPC call: true random selection, single query
+//     const { data: videos, error } = await supabase
+//       .rpc("get_random_videos", { p_limit: limit });
+
+//     if (error) throw error;
+
+//     res.json({
+//       limit,
+//       count: videos.length,
+//       hasMore: true, // always true for random
+//       videos
+//     });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
+// Bulk update videos
+
+
+
 app.get("/videos", async (req, res) => {
-  const page = Number(req.query.page) || 1;
-  const limit = 3;
+  const limit = Number(req.query.limit) || 4;
+  const excludeIds = req.query.exclude
+    ? req.query.exclude.split(',').map(Number)
+    : [];
+  const category = req.query.category || null;
+  const search = req.query.search || null;
 
   try {
-    // ✅ 1️⃣ TOTAL COUNT
-    const { count, error: countError } = await supabase
-      .from("videos_metadata")
-      .select("*", { count: "exact", head: true });
+    let query = supabase.from("videos_metadata").select("*");
 
-    if (countError) {
-      return res.status(500).json({ error: countError.message });
-    }
+    // Apply filters
+    if (category) query = query.eq("category", category);
+    if (search) query = query.ilike("title", `%${search}%`);
+    if (excludeIds.length) query = query.not("id", "in", `(${excludeIds.join(',')})`);
 
-    // ✅ 2️⃣ RANDOM SELECTION
-    // Approach: first generate random offsets for `limit` rows
-    const total = count || 0;
-    const randomOffsets = Array.from({ length: limit }, () =>
-      Math.floor(Math.random() * total)
-    );
+    // Random selection using precomputed rand_val
+    const randVal = Math.random();
+    query = query.gte("rand_val", randVal).order("rand_val", { ascending: true }).limit(limit);
 
-    const videoPromises = randomOffsets.map(async (offset) => {
-      const { data, error } = await supabase
+    let { data: videos, error } = await query;
+    if (error) throw error;
+
+    // If not enough rows, wrap around
+    if (videos.length < limit) {
+      const remaining = limit - videos.length;
+      const { data: moreVideos, error: err2 } = await supabase
         .from("videos_metadata")
         .select("*")
-        .range(offset, offset);
-      if (error) throw error;
-      return data[0];
-    });
-
-    const videos = await Promise.all(videoPromises);
+        .not("id", "in", `(${excludeIds.concat(videos.map(v => v.id)).join(',')})`)
+        .order("rand_val", { ascending: true })
+        .limit(remaining);
+      if (err2) throw err2;
+      videos.push(...moreVideos);
+    }
 
     res.json({
-      page,
       limit,
-      totalCount: total,
-      hasMore: true, // always true for random
-      videos
+      count: videos.length,
+      videos,
+      hasMore: videos.length >= limit
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Bulk update videos
+
+
 app.patch("/videos/bulk-update", async (req, res) => {
   const { video_ids, updates } = req.body;
 
