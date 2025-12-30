@@ -358,7 +358,7 @@ app.get("/sitemap.xml", async (req, res) => {
   const { data } = await supabase.from("videos_metadata").select("id");
 
   // ✅ Frontend domain URLs for SEO
-  const siteUrl = "https://lushfans.netlify.app";
+  const siteUrl = "https://nsfwporn.live";
 
   const urls = data.map(v => `
     <url>
@@ -390,7 +390,7 @@ app.get("/video/:id", async (req, res) => {
   if (!video) return res.status(404).send("Video not found");
 
   // ✅ FRONTEND DOMAIN (your SPA) for SEO and redirect
-  const siteUrl = "http://127.0.0.1:4049/newtry";
+  const siteUrl = "https://nsfwporn.live/";
 
   res.send(`
 <!DOCTYPE html>
