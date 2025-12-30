@@ -87,48 +87,76 @@ app.get("/", (req, res) => res.json({ message: "Video API running 🎬" }));
 app.get("/videos", async (req, res) => {
   const limit = Number(req.query.limit) || 4;
   const excludeIds = req.query.exclude
-    ? req.query.exclude.split(',').map(Number)
+    ? req.query.exclude.split(",") 
     : [];
-  const category = req.query.category || null;
-  const search = req.query.search || null;
 
   try {
     let query = supabase.from("videos_metadata").select("*");
 
-    // Apply filters
-    if (category) query = query.eq("category", category);
-    if (search) query = query.ilike("title", `%${search}%`);
-    if (excludeIds.length) query = query.not("id", "in", `(${excludeIds.join(',')})`);
 
-    // Random selection using precomputed rand_val
+    if (excludeIds.length) {
+     
+      const excludeStr = excludeIds.join(",");
+      query = query.not("id", "in", `(${excludeStr})`);
+    }
+
+ 
     const randVal = Math.random();
-    query = query.gte("rand_val", randVal).order("rand_val", { ascending: true }).limit(limit);
+    query = query
+      .gte("rand_val", randVal)
+      .order("rand_val", { ascending: true })
+      .limit(limit);
 
-    let { data: videos, error } = await query;
+    const { data: videos, error } = await query;
     if (error) throw error;
 
-    // If not enough rows, wrap around
-    if (videos.length < limit) {
-      const remaining = limit - videos.length;
-      const { data: moreVideos, error: err2 } = await supabase
-        .from("videos_metadata")
-        .select("*")
-        .not("id", "in", `(${excludeIds.concat(videos.map(v => v.id)).join(',')})`)
-        .order("rand_val", { ascending: true })
-        .limit(remaining);
-      if (err2) throw err2;
-      videos.push(...moreVideos);
+   
+    if (!videos || videos.length === 0) {
+      return res.json({
+        videos: [],
+        allWatched: true
+      });
     }
 
     res.json({
-      limit,
-      count: videos.length,
       videos,
-      hasMore: videos.length >= limit
+      allWatched: false
     });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+
+
+
+app.get("/videos/new", async (req, res) => {
+  const limit = 5;
+  const cursor = req.query.cursor; 
+
+  let query = supabase
+    .from("videos_metadata")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (cursor) {
+    query = query.lt("created_at", cursor);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+
+  res.json({
+    videos: data,
+    nextCursor: data.length
+      ? data[data.length - 1].created_at
+      : null
+  });
 });
 
 
