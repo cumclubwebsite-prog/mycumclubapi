@@ -84,51 +84,125 @@ app.get("/", (req, res) => res.json({ message: "Video API running 🎬" }));
 
 
 
-app.get("/videos", async (req, res) => {
-  const limit = Number(req.query.limit) || 4;
-  const excludeIds = req.query.exclude
-    ? req.query.exclude.split(",") 
-    : [];
+// app.get("/videos", async (req, res) => {
+//   const limit = Number(req.query.limit) || 4;
+//   const excludeIds = req.query.exclude
+//     ? req.query.exclude.split(",") 
+//     : [];
 
-  try {
-    let query = supabase.from("videos_metadata").select("*");
+//   try {
+//     let query = supabase.from("videos_metadata").select("*");
 
 
-    if (excludeIds.length) {
+//     if (excludeIds.length) {
      
-      const excludeStr = excludeIds.join(",");
-      query = query.not("id", "in", `(${excludeStr})`);
-    }
+//       const excludeStr = excludeIds.join(",");
+//       query = query.not("id", "in", `(${excludeStr})`);
+//     }
 
  
-    const randVal = Math.random();
-    query = query
-      .gte("rand_val", randVal)
-      .order("rand_val", { ascending: true })
-      .limit(limit);
+//     const randVal = Math.random();
+//     query = query
+//       .gte("rand_val", randVal)
+//       .order("rand_val", { ascending: true })
+//       .limit(limit);
 
-    const { data: videos, error } = await query;
-    if (error) throw error;
+//     const { data: videos, error } = await query;
+//     if (error) throw error;
 
    
-    if (!videos || videos.length === 0) {
-      return res.json({
-        videos: [],
-        allWatched: true
-      });
+//     if (!videos || videos.length === 0) {
+//       return res.json({
+//         videos: [],
+//         allWatched: true
+//       });
+//     }
+
+//     res.json({
+//       videos,
+//       allWatched: false
+//     });
+
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
+
+
+// Assumes: import express and supabase client already initialized:
+// const express = require('express');
+// const app = express();
+// const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+app.get('/videos', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 5;
+    const cursor = req.query.cursor; // expected ISO timestamp string, e.g. 2025-01-01T12:00:00.000Z
+
+    // Build base query: newest first
+    let query = supabase
+      .from('videos_metadata')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false }) // tiebreaker for stable ordering
+      .limit(limit);
+
+    // If cursor provided, fetch rows older than cursor
+    if (cursor) {
+      // Use lt on created_at; if you expect multiple rows with same created_at,
+      // a more complex cursor (created_at + id) can be used. This simple variant assumes created_at is unique enough.
+      query = query.lt('created_at', cursor);
     }
 
-    res.json({
-      videos,
-      allWatched: false
-    });
+    const { data, error } = await query;
 
+    if (error) {
+      console.error('Supabase query error:', error);
+      return res.status(500).json({ error: error.message || 'Database error' });
+    }
+
+    // Prepare next cursor (last row's created_at) or null
+    const nextCursor = (data && data.length) ? data[data.length - 1].created_at : null;
+
+    return res.json({ videos: data, nextCursor });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Server error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 
+
+app.get('/videos/page', async (req, res) => {
+  try {
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = parseInt(req.query.limit, 10) || 5;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const { data, error } = await supabase
+      .from('videos_metadata')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      console.error(error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({
+      videos: data,
+      page,
+      limit
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 
 app.get("/videos/new", async (req, res) => {
