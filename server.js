@@ -510,17 +510,9 @@ app.get("/video/:id", async (req, res) => {
       return res.status(404).send("Video not found");
     }
 
-    // 2️⃣ Ensure absolute URLs for thumbnail and video
-    // Replace YOUR_SERVER_DOMAIN with your actual server domain
-    const serverDomain = process.env.SERVER_DOMAIN || "https://cumclubapi.onrender.com";
-
-    const thumbnailUrl = video.thumbnail_url.startsWith("http")
-      ? video.thumbnail_url
-      : `${serverDomain}/${video.thumbnail_url}`;
-
-    const videoUrl = video.video_url.startsWith("http")
-      ? video.video_url
-      : `${serverDomain}/${video.video_url}`;
+    // 2️⃣ Use Supabase public URLs directly
+    const thumbnailUrl = video.thumbnail_url; // public URL
+    const videoUrl = video.video_url;         // public URL
 
     // 3️⃣ Serve HTML with OG tags for scrapers
     //    and redirect normal users to SPA
@@ -539,7 +531,8 @@ app.get("/video/:id", async (req, res) => {
 <meta property="og:image" content="${thumbnailUrl}">
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="720">
-<meta property="og:url" content="${serverDomain}/video/${video.id}">
+<meta property="og:image:alt" content="${video.title}">
+<meta property="og:url" content="https://nsfwporntest.netlify.app/video/${video.id}">
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
@@ -568,6 +561,7 @@ app.get("/video/:id", async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
+
 
 
 
