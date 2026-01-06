@@ -453,6 +453,7 @@ ${urls}
 /**
  * SEO VIDEO PAGE (MAIN FIX – UPDATED)
  */
+
 // app.get("/video/:id", async (req, res) => {
 //   const { id } = req.params;
 
@@ -487,41 +488,85 @@ ${urls}
 
 
 
+
+
+
 // GET /videos/:id/page?limit=5
 
+
+
 app.get("/video/:id", async (req, res) => {
-  const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-  const { data: video } = await supabase
-    .from("videos_metadata")
-    .select("*")
-    .eq("id", id)
-    .single();
+    // 1️⃣ Fetch video metadata
+    const { data: video, error } = await supabase
+      .from("videos_metadata")
+      .select("*")
+      .eq("id", id)
+      .single();
 
-  if (!video) return res.status(404).send("Not found");
+    if (error || !video) {
+      return res.status(404).send("Video not found");
+    }
 
-  res.send(`
+    // 2️⃣ Ensure absolute URLs for thumbnail and video
+    // Replace YOUR_SERVER_DOMAIN with your actual server domain
+    const serverDomain = process.env.SERVER_DOMAIN || "https://api.nsfw.com";
+
+    const thumbnailUrl = video.thumbnail_url.startsWith("http")
+      ? video.thumbnail_url
+      : `${serverDomain}/${video.thumbnail_url}`;
+
+    const videoUrl = video.video_url.startsWith("http")
+      ? video.video_url
+      : `${serverDomain}/${video.video_url}`;
+
+    // 3️⃣ Serve HTML with OG tags for scrapers
+    //    and redirect normal users to SPA
+    res.send(`
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${video.meta_title || video.title}</title>
+
+<!-- Open Graph / Facebook -->
 <meta property="og:type" content="video.other">
-<meta property="og:title" content="${video.meta_title}">
-<meta property="og:description" content="${video.meta_description}">
-<meta property="og:image" content="${video.thumbnail_url}">
+<meta property="og:title" content="${video.meta_title || video.title}">
+<meta property="og:description" content="${video.meta_description || video.description || ''}">
+<meta property="og:image" content="${thumbnailUrl}">
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="720">
-<meta property="og:url" content="https://nsfwporntest.netlify.app/video/${video.id}">
+<meta property="og:url" content="${serverDomain}/video/${video.id}">
+
+<!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${video.meta_title || video.title}">
+<meta name="twitter:description" content="${video.meta_description || video.description || ''}">
+<meta name="twitter:image" content="${thumbnailUrl}">
+
+<!-- Optional video tags -->
+<meta property="og:video" content="${videoUrl}">
+<meta property="og:video:type" content="video/mp4">
+<meta property="og:video:width" content="1280">
+<meta property="og:video:height" content="720">
+
 </head>
 <body>
 <script>
-  // redirect for normal users
-  location.replace("/?v=${video.id}");
+  // Redirect normal users to SPA after OG tags are read
+  const videoId = ${video.id};
+  location.replace("https://nsfwporntest.netlify.app/?v=" + videoId);
 </script>
 </body>
 </html>
-  `);
+    `);
+  } catch (err) {
+    console.error("OG page error:", err);
+    res.status(500).send("Internal Server Error");
+  }
 });
 
 
