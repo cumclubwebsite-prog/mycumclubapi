@@ -453,6 +453,42 @@ ${urls}
 /**
  * SEO VIDEO PAGE (MAIN FIX – UPDATED)
  */
+// app.get("/video/:id", async (req, res) => {
+//   const { id } = req.params;
+
+//   const { data: video } = await supabase
+//     .from("videos_metadata")
+//     .select("*")
+//     .eq("id", id)
+//     .single();
+
+//   if (!video) return res.status(404).send("Not found");
+
+//   res.send(`
+// <!DOCTYPE html>
+// <html>
+// <head>
+// <meta charset="utf-8">
+// <meta property="og:type" content="video.other">
+// <meta property="og:title" content="${video.meta_title}">
+// <meta property="og:description" content="${video.meta_description}">
+// <meta property="og:image" content="${video.thumbnail_url}">
+// <meta property="og:url" content="https://nsfwporntest.netlify.app/video/${video.id}">
+// <meta name="twitter:card" content="summary_large_image">
+
+// <script>
+//   location.replace("/?v=${video.id}");
+// </script>
+// </head>
+// <body></body>
+// </html>
+//   `);
+// });
+
+
+
+// GET /videos/:id/page?limit=5
+
 app.get("/video/:id", async (req, res) => {
   const { id } = req.params;
 
@@ -473,21 +509,23 @@ app.get("/video/:id", async (req, res) => {
 <meta property="og:title" content="${video.meta_title}">
 <meta property="og:description" content="${video.meta_description}">
 <meta property="og:image" content="${video.thumbnail_url}">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
 <meta property="og:url" content="https://nsfwporntest.netlify.app/video/${video.id}">
 <meta name="twitter:card" content="summary_large_image">
-
+</head>
+<body>
 <script>
+  // redirect for normal users
   location.replace("/?v=${video.id}");
 </script>
-</head>
-<body></body>
+</body>
 </html>
   `);
 });
 
 
 
-// GET /videos/:id/page?limit=5
 app.get("/videos/:id/page", async (req, res) => {
   const id = Number(req.params.id);
   const limit = Number(req.query.limit) || 5;
