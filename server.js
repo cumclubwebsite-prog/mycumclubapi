@@ -523,6 +523,35 @@ app.get("/video/:id", async (req, res) => {
 });
 
 
+// GET /videos/:id/page?limit=5
+app.get("/videos/:id/page", async (req, res) => {
+  const id = Number(req.params.id);
+  const limit = Number(req.query.limit) || 5;
+
+  // 1️⃣ Get video creation timestamp
+  const { data: video, error } = await supabase
+      .from("videos_metadata")
+      .select("created_at")
+      .eq("id", id)
+      .single();
+
+  if (error || !video) return res.status(404).json({ error: "Video not found" });
+
+  // 2️⃣ Count videos newer than this one
+  const { count } = await supabase
+      .from("videos_metadata")
+      .select("*", { count: "exact", head: true })
+      .gt("created_at", video.created_at);
+
+  // 3️⃣ Calculate page
+  const page = Math.floor(count / limit) + 1;
+
+  res.json({ page });
+});
+
+
+
+
 /**
  * Download a selected video
  */
