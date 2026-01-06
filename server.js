@@ -512,7 +512,7 @@ app.get("/video/:id", async (req, res) => {
 
     // 2️⃣ Ensure absolute URLs for thumbnail and video
     // Replace YOUR_SERVER_DOMAIN with your actual server domain
-    const serverDomain = process.env.SERVER_DOMAIN || "https://api.nsfw.com";
+    const serverDomain = process.env.SERVER_DOMAIN || "https://cumclubapi.onrender.com";
 
     const thumbnailUrl = video.thumbnail_url.startsWith("http")
       ? video.thumbnail_url
