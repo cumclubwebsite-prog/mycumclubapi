@@ -432,7 +432,7 @@ app.get("/sitemap.xml", async (req, res) => {
   const { data } = await supabase.from("videos_metadata").select("id");
 
   // ✅ Frontend domain URLs for SEO
-  const siteUrl = "https://nsfwporntest.netlify.app";
+  const siteUrl = "https://nsfwporn.live";
 
   const urls = data.map(v => `
     <url>
@@ -532,7 +532,7 @@ app.get("/video/:id", async (req, res) => {
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="720">
 <meta property="og:image:alt" content="${video.title}">
-<meta property="og:url" content="https://nsfwporntest.netlify.app/video/${video.id}">
+<meta property="og:url" content="https://nsfwporn.live/video/${video.id}">
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
@@ -551,7 +551,7 @@ app.get("/video/:id", async (req, res) => {
 <script>
   // Redirect normal users to SPA after OG tags are read
   const videoId = ${video.id};
-  location.replace("https://nsfwporntest.netlify.app/?v=" + videoId);
+  location.replace("https://nsfwporn.live/?v=" + videoId);
 </script>
 </body>
 </html>
