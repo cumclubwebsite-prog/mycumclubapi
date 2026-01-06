@@ -432,7 +432,7 @@ app.get("/sitemap.xml", async (req, res) => {
   const { data } = await supabase.from("videos_metadata").select("id");
 
   // ✅ Frontend domain URLs for SEO
-  const siteUrl = "https://nsfwporn.live";
+  const siteUrl = "https://nsfwporntest.netlify.app";
 
   const urls = data.map(v => `
     <url>
@@ -454,73 +454,37 @@ ${urls}
  * SEO VIDEO PAGE (MAIN FIX – UPDATED)
  */
 app.get("/video/:id", async (req, res) => {
-  const id = Number(req.params.id);
+  const { id } = req.params;
+
   const { data: video } = await supabase
     .from("videos_metadata")
     .select("*")
     .eq("id", id)
     .single();
 
-  if (!video) return res.status(404).send("Video not found");
-
-  // ✅ FRONTEND DOMAIN (your SPA) for SEO and redirect
-  const siteUrl = "https://nsfwporn.live/";
+  if (!video) return res.status(404).send("Not found");
 
   res.send(`
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>${esc(video.meta_title || video.title)}</title>
-<meta name="description" content="${esc(video.meta_description)}">
-<meta name="keywords" content="${esc(video.meta_keywords)}">
-<meta name="robots" content="index,follow">
-
-<link rel="canonical" href="${siteUrl}/video/${video.id}" />
-
-<!-- OPEN GRAPH -->
+<meta charset="utf-8">
 <meta property="og:type" content="video.other">
-<meta property="og:title" content="${esc(video.meta_title)}">
-<meta property="og:description" content="${esc(video.meta_description)}">
+<meta property="og:title" content="${video.meta_title}">
+<meta property="og:description" content="${video.meta_description}">
 <meta property="og:image" content="${video.thumbnail_url}">
-<meta property="og:url" content="${siteUrl}/video/${video.id}">
-
-<!-- TWITTER -->
+<meta property="og:url" content="https://nsfwporntest.netlify.app/video/${video.id}">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="${esc(video.meta_title)}">
-<meta name="twitter:description" content="${esc(video.meta_description)}">
-<meta name="twitter:image" content="${video.thumbnail_url}">
 
-<!-- ✅ VIDEO SCHEMA (JSON-LD for Google) -->
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "VideoObject",
-  "name": "${esc(video.title)}",
-  "description": "${esc(video.meta_description)}",
-  "thumbnailUrl": ["${video.thumbnail_url}"],
-  "contentUrl": "${video.video_url}",
-  "embedUrl": "${siteUrl}/video/${video.id}"
-}
-</script>
-
-<!-- SPA REDIRECT (unchanged for users) -->
 <script>
-  window.location.replace("${siteUrl}/?v=${video.id}&cat=${video.category}");
+  location.replace("/?v=${video.id}");
 </script>
 </head>
-<body>
-<h1>${esc(video.title)}</h1>
-<p>${esc(video.description)}</p>
-
-<!-- Fallback link for SEO / users without JS -->
-<p><a href="${siteUrl}/?v=${video.id}&cat=${video.category}">Watch Video</a></p>
-</body>
+<body></body>
 </html>
-`);
+  `);
 });
+
 
 
 // GET /videos/:id/page?limit=5
@@ -548,6 +512,7 @@ app.get("/videos/:id/page", async (req, res) => {
 
   res.json({ page });
 });
+
 
 
 
